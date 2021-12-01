@@ -12,7 +12,7 @@ And here's our test input.
 
 <!-- livebook:{"livebook_object":"cell_input","name":"test input","type":"textarea","value":"199\n200\n208\n210\n200\n207\n240\n269\n260\n263"} -->
 
-Accessing those readings as a list (or stream) of integers would be useful, so let's create a module to help with that.
+Accessing those depth readings as a list (or stream) of integers would be useful, so let's create a module to help with that.
 
 ```elixir
 defmodule Input do
@@ -40,43 +40,17 @@ Our goal for part 1 is to find out how many times the depth readings increased, 
 
 <!-- livebook:{"break_markdown":true} -->
 
-One way to accomplish this is to chunk these numbers as "pair chains", i.e. pair the first with the second, the second with the third, the third with the fourth, and so on. Then we can simple count how many of these "pair chains" have a second element greater than the first element.
+One way to accomplish this is to chunk these numbers as "pair chains", i.e. pair the first with the second, the second with the third, the third with the fourth, and so on. We can do this with `Enum.chunk_every/4`. (We `:discard` the final chunk if it does not contain exactly two elements.)
 
 ```elixir
-defmodule Chunker do
-  def pair_chains(enum) do
-    enum
-    |> Enum.chunk_while([], &pair_chainer/2, &discard_trailing_elements/1)
-  end
-
-  defp pair_chainer(el, acc) do
-    if Enum.empty?(acc) do
-      # start new, incomplete pair
-      {:cont, [el]}
-    else
-      # emit a pair, and start a new, incomplete pair
-      {:cont, acc ++ [el], [el]}
-    end
-  end
-
-  defp discard_trailing_elements(_acc), do: {:cont, []}
-end
-
-pair_chainer = fn el, acc ->
-  if Enum.empty?(acc) do
-    {:cont, [el]}
-  else
-    # emit a pair, and start a new, incomplete pair
-    {:cont, acc ++ [el], [el]}
-  end
-end
-
-pair_chains = Chunker.pair_chains([1, 2, 4, 3, 8])
+pair_chains = Enum.chunk_every([1, 2, 4, 3, 8], 2, 1, :discard)
 ```
 
 ```output
 [[1, 2], [2, 4], [4, 3], [3, 8]]
 ```
+
+Then we can count the number of pairs where the second element is larger (deeper) than the first element.
 
 ```elixir
 Enum.count(pair_chains, fn [a, b] -> b > a end)
@@ -93,7 +67,7 @@ defmodule Day1 do
   def part_1(input_name) do
     input_name
     |> Input.as_ints()
-    |> Chunker.pair_chains()
+    |> Enum.chunk_every(2, 1, :discard)
     |> Enum.count(&increasing?/1)
   end
 
@@ -133,38 +107,6 @@ In part 1, we had to compare "pair chains". In part 2, we need to compare "tripl
 
 <!-- livebook:{"break_markdown":true} -->
 
-To do that, I'll make a generic chainer function which can emit chunks of arbitrary length.
-
-```elixir
-defmodule Chunker do
-  def pair_chains(enum), do: chunk_chains(enum, 2)
-
-  def triple_chains(enum), do: chunk_chains(enum, 3)
-
-  def chunk_chains(enum, size) do
-    Enum.chunk_while(enum, [], chainer(size), &discard_trailing_elements/1)
-  end
-
-  defp chainer(n) do
-    fn el, chunk ->
-      if length(chunk) == n do
-        # emit a chunk, and create new chunk
-        {:cont, chunk, tl(chunk) ++ [el]}
-      else
-        # append to the chunk we're currently building
-        {:cont, chunk ++ [el]}
-      end
-    end
-  end
-
-  defp discard_trailing_elements(acc), do: {:cont, acc, []}
-end
-```
-
-```output
-{:module, Chunker, <<70, 79, 82, 49, 0, 0, 9, ...>>, {:discard_trailing_elements, 1}}
-```
-
 We don't want to compare the numbers within the triple chains, we want to sum the nubmers within a chain and compare that to the previous chain. That means that after we sum the triple chains, we need to create pair chains to do the comparison!
 
 ```elixir
@@ -172,16 +114,16 @@ defmodule Day1 do
   def part_1(input_name) do
     input_name
     |> Input.as_ints()
-    |> Chunker.pair_chains()
+    |> Enum.chunk_every(2, 1, :discard)
     |> Enum.count(&increasing?/1)
   end
 
   def part_2(input_name) do
     input_name
     |> Input.as_ints()
-    |> Chunker.triple_chains()
+    |> Enum.chunk_every(3, 1, :discard)
     |> Stream.map(&Enum.sum/1)
-    |> Chunker.pair_chains()
+    |> Enum.chunk_every(2, 1, :discard)
     |> Enum.count(&increasing?/1)
   end
 
